@@ -1,0 +1,189 @@
+<html>
+<head>
+<style>
+
+body {
+  font: 10px sans-serif;
+}
+
+td { font: 10px sans-serif; color: #fff; }
+td:last-child { padding-left: 10px; }
+
+th { 
+    font: 12px sans-serif; 
+    font-weight: bold; 
+    color: #fff; 
+}
+
+.axiscaption {
+    text-anchor: middle;
+    dy: -0.91em;
+}
+
+.axis path,
+.axis line {
+  fill: none;
+  stroke: #000;
+  shape-rendering: crispEdges;
+  stroke-width: 1.0px;
+}
+
+.area {
+  fill: steelblue;
+}
+.bar {
+  fill: black;
+}
+text.headline {
+  font: 12px sans-serif;
+  font-weight: bold;
+}
+
+rect {
+  stroke: #000;
+  stroke-width: 1.0px;
+  shape-rendering: crispEdges;
+}
+
+line {
+  fill: none;
+  stroke: #ff7f0e;
+  stroke-width: 2.5px;
+}
+path {
+}
+path.line {
+    fill: none;
+    stroke-width: 2.5px;
+    stroke-opacity: 1.0;
+}
+
+svg { 
+    border-top: 1px dashed #000;
+    border-right: 1px dashed #000;
+    border-left: 1px dashed #000;
+    border-bottom: 0px;
+}
+svg:last-child { border-bottom: 1px dashed #000; }
+
+.d3-tip {
+  line-height: 1;
+  font-weight: bold;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  border-radius: 2px;
+}
+
+.d3-tip.n:after {
+  margin: -1px 0 0 0;
+  top: 100%;
+  left: 0;
+}
+
+</style>
+</head>
+
+<body>
+<script>
+var g_width = 960;
+var g_height = 450;
+var yAxisDy = '-0.81em';
+
+var resourceType = {
+    typ: 'cc',
+    get: function(d) { return d[this.typ] },
+    set: function(d) { this.typ = d }
+}
+var standard_subtitle = function() {
+    var ncs = function(d) { return d + ' Norwegian Continental Shelf.' }
+    if (resourceType.typ=='cc')          return ncs('Crude and Condensate.')
+    else if (resourceType.typ=='gasngl') return ncs('Gas and NGL.')
+    else if (resourceType.typ=='all') return ncs('All petroleum.')
+}
+
+var cutOffYear = function() { return 2005 }
+</script>
+<script src="d3.v3.min.js"></script>
+<script src="d3.tip.mod.js"></script>
+<script src="colorbrewer.js"></script>
+<script src="lib/utils.js"></script>
+<script src="lib/get_data.js"></script>
+<script src="lib/stacked_production.js"></script>
+<script src="lib/yoy_by_field.js"></script>
+<script src="lib/production_by_inc_dec_rate.js"></script>
+<script src="lib/percentage_of_max_production_vs_produced_percentage.js"></script>
+<script src="lib/yearly_yield_as_percentage_of_eur.js"></script>
+<script src="lib/rp.js"></script>
+<script>
+var body = d3.select('body');
+var prodbyDateAndStartDecade = function(data) {
+    return productionByDateAndStartDecade(productionWith12MMAflat(data));
+};
+
+var with_resource = function (typ, cb) {
+    resourceType.set(typ);
+    get_data(function(d) { cb(d); })
+}
+
+update_fns = []
+
+function label() {
+    var lbl = body.append('label')
+    lbl.append('input').attr('type', 'radio')
+    return lbl
+}
+
+function update(data) {
+    update_fns.forEach(function(fn) { fn(data) })
+}
+var form = body.append('form')
+form.append('span').text('Choose resource: ')
+var cc = form.append('input').attr('name', 'resource').attr('type', 'radio').attr('id', 'cc')
+.on('change', function(d) { if (this.checked) { with_resource('cc', update) }})
+document.getElementById('cc').checked = true
+form.append('label').attr('for', 'cc').text('Crude and Condensate')
+
+form.append('input').attr('name', 'resource').attr('type', 'radio').attr('id', 'gn')
+    .on('change', function(d) { if (this.checked) { with_resource('gasngl', update) }})
+form.append('label').attr('for', 'gn').text('Gas and NGL')
+
+form.append('input').attr('name', 'resource').attr('type', 'radio').attr('id', 'all')
+    .on('change', function(d) { if (this.checked) { with_resource('all', update) }})
+form.append('label').attr('for', 'all').text('All')
+
+
+get_data(function(data) {
+    var dat = prodbyDateAndStartDecade(data);
+    var wrap = function(f) { return function(d) { f(prodbyDateAndStartDecade(d).production) } }
+    update_fns.push(wrap(init(d3.select('body'), dat, {
+       title: 'Production by Start Production Decade',
+       axisCaption: 'Mboe/d',
+       ysum: function(d) { return d.y0 + d.y;},
+       y0: function(d) { return d.y0; },
+       })))
+    update_fns.push(wrap(init(d3.select('body'), dat, {
+       title: 'Share of Production by Start Production Decade',
+       axisCaption: 'Percentage',
+       ysum: function(d) { return d.relativeY0 + d.relativeY;},
+       y0: function(d) { return d.relativeY0; }
+       })))
+    update_fns.push(wrap(init(d3.select('body'), dat, {
+       title: 'Cumulative Production by Start Production Decade',
+       axisCaption: 'Gboe',
+       ysum: function(d) { return d.accumulativeY0 + d.accumulativeY;},
+       y0: function(d) { return d.accumulativeY0; }
+       })))
+    update_fns.forEach(function(f) { f(data) })
+    update_fns.push(yoy_by_field_init_and_update(body)(data))
+    update_fns.push(percentageOfMaxProductionVsProducedPercentage_graph(data))
+    update_fns.push(show_yearly_yield_as_percentage_of_eur(data))
+    update_fns.push(rpVsPercentageProducedOfEUR(data))
+    //update_fns.push(show_production_inc_dec_rate(data))
+
+   })
+</script>
+</body>
+
+</html>
+
