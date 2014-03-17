@@ -179,7 +179,11 @@ get_data(function(data) {
     update_fns.push(percentageOfMaxProductionVsProducedPercentage_graph(data))
     update_fns.push(show_yearly_yield_as_percentage_of_eur(data))
     update_fns.push(rpVsPercentageProducedOfEUR(data))
-    //update_fns.push(show_production_inc_dec_rate(data))
+    if (window.location.href.indexOf("?extra")!=-1) {
+      update_fns.push(show_production_inc_dec_rate(data))
+    } else {
+      //console.log(window.location.href);
+    }
 
    })
 </script>
