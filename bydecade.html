@@ -1,0 +1,453 @@
+<html>
+<head>
+<style>
+
+body {
+  font: 10px sans-serif;
+}
+
+td { font: 10px sans-serif; color: #fff; }
+td:last-child { padding-left: 10px; }
+
+th { 
+    font: 12px sans-serif; 
+    font-weight: bold; 
+    color: #fff; 
+}
+
+.axiscaption {
+    text-anchor: middle;
+    dy: -0.91em;
+}
+
+.axis path,
+.axis line {
+  fill: none;
+  stroke: #000;
+  shape-rendering: crispEdges;
+  stroke-width: 1.0px;
+}
+
+.area {
+  fill: steelblue;
+}
+.bar {
+  fill: black;
+}
+text.headline {
+  font: 12px sans-serif;
+  font-weight: bold;
+}
+
+rect {
+  stroke: #000;
+  stroke-width: 1.0px;
+  shape-rendering: crispEdges;
+}
+
+line {
+  fill: none;
+  stroke: #ff7f0e;
+  stroke-width: 2.5px;
+}
+path {
+}
+path.line {
+    fill: none;
+    stroke-width: 2.5px;
+    stroke-opacity: 1.0;
+}
+
+svg { 
+    border-top: 1px dashed #000;
+    border-right: 1px dashed #000;
+    border-left: 1px dashed #000;
+    border-bottom: 0px;
+}
+svg:last-child { border-bottom: 1px dashed #000; }
+
+.d3-tip {
+  line-height: 1;
+  font-weight: bold;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  border-radius: 2px;
+}
+
+.d3-tip.n:after {
+  margin: -1px 0 0 0;
+  top: 100%;
+  left: 0;
+}
+
+</style>
+</head>
+
+<body>
+<script>
+var g_width = 960;
+var g_height = 450;
+var yAxisDy = '-0.81em';
+
+var resourceType = {
+    typ: 'cc',
+    get: function(d) { return d[this.typ] },
+    set: function(d) { this.typ = d }
+}
+
+var standard_subtitle = function() {
+    var ncs = function(d) { return d + ' Norwegian Continental Shelf.' }
+    if (resourceType.typ=='cc')          return ncs('Crude and Condensate.')
+    else if (resourceType.typ=='gasngl') return ncs('Gas and NGL.')
+    else if (resourceType.typ=='all') return ncs('All petroleum.')
+}
+
+var cutOffYear = function() { return 2005 }
+</script>
+<script src="d3.v3.min.js"></script>
+<script src="d3.tip.mod.js"></script>
+<script src="colorbrewer.js"></script>
+<script src="lib/utils.js"></script>
+<script src="lib/get_data.js"></script>
+<script src="lib/stacked_production.js"></script>
+<script src="lib/yoy_by_field.js"></script>
+<script src="lib/production_by_inc_dec_rate.js"></script>
+<script src="lib/percentage_of_max_production_vs_produced_percentage.js"></script>
+<script src="lib/yearly_yield_as_percentage_of_eur.js"></script>
+<script src="lib/rp.js"></script>
+<script>
+var body = d3.select('body');
+var prodbyDateAndStartDecade = function(data) {
+    return productionByDateAndStartDecade(productionWith12MMAflat(data));
+};
+function last(ar) {
+  return ar[ar.length-1]
+}
+
+var with_resource = function (typ, cb) {
+    resourceType.set(typ);
+    get_data(function(d) { cb(d); })
+}
+
+update_fns = []
+
+function label() {
+    var lbl = body.append('label')
+    lbl.append('input').attr('type', 'radio')
+    return lbl
+}
+
+function update(data) {
+    update_fns.forEach(function(fn) { fn(data) })
+}
+var form = body.append('form')
+form.append('span').text('Choose resource: ')
+var cc = form.append('input').attr('name', 'resource').attr('type', 'radio').attr('id', 'cc')
+.on('change', function(d) { if (this.checked) { with_resource('cc', update) }})
+document.getElementById('cc').checked = true
+form.append('label').attr('for', 'cc').text('Crude and Condensate')
+
+form.append('input').attr('name', 'resource').attr('type', 'radio').attr('id', 'gn')
+    .on('change', function(d) { if (this.checked) { with_resource('gasngl', update) }})
+form.append('label').attr('for', 'gn').text('Gas and NGL')
+
+form.append('input').attr('name', 'resource').attr('type', 'radio').attr('id', 'all')
+    .on('change', function(d) { if (this.checked) { with_resource('all', update) }})
+form.append('label').attr('for', 'all').text('All')
+
+form = body.append('form')
+form.append('span').text('Choose start year: ')
+var step = 5
+var currYear = new Date().getFullYear()
+var years = d3.range(1970, currYear, step)
+for (var y=last(years)+1; y<currYear; y++) {
+  years.push(y)
+}
+//console.log(years)
+
+var cutOffYear = 1900;
+years.forEach(function(year) {
+  var id = 'year-' + year
+  form.append('input').attr('name', 'resource').attr('type', 'radio').attr('id', id)
+            .on('change', function(d) { if (this.checked) { cutOffYear=year; get_data(update) }})
+  form.append('label').attr('for', id).text('' + year)
+})
+
+update_fns = []
+
+function do_init(decade) {
+root = d3.select("body")
+
+var margin = {top: 40, right: 40, bottom: 140, left: 40},
+    width = g_width - margin.left - margin.right,
+    height = g_height - margin.top - margin.bottom;
+
+var svg_root = root.append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom);
+
+var svg = svg_root
+    .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+var xAxis = svg.append('g')
+    .attr('transform', 'translate(0,' + height+')')
+    .attr('class', 'x axis');
+
+var yAxisLeft = svg.append('g')
+    .attr('transform', 'translate(0,0)')
+    .attr('class', 'y axis');
+
+var yAxisRight = svg.append('g')
+    .attr('transform', 'translate('+width+',0)')
+    .attr('class', 'y axis');
+
+svg.append('text')
+    .attr('class', 'axiscaption')
+    .text('Mboe/d')
+    .attr('dy', yAxisDy);
+
+svg.append('text')
+    .attr('transform', 'translate('+width+',0)')
+    .style('text-anchor', 'middle')
+    .attr('dy', yAxisDy)
+    .text('Mboe/d');
+
+svg.append('text')
+    .attr('class', 'headline')
+    .attr('dy', '-1.75em')
+    .attr('x', width/2)
+    .style('text-anchor', 'middle')
+    .text('Production details for fields with production start in the ' + decade + 's');
+
+    var subtitle = svg.append('text')
+    .attr('dy', '-0.75em')
+    .attr('x', width/2)
+    .style('text-anchor', 'middle')
+
+    var g = svg.append('g')
+    .attr('transform', 'translate(' + (50) + "," + (height+35) +')');
+
+    var colors = d3.scale.category20c();
+
+    var graph_canvas = svg.append('g').attr('id', 'graph-canvas')
+
+    // ************************************************* //
+    function focusArea(key) {
+      graph_canvas.selectAll('path')
+      .transition()
+      .duration(500)
+      .style('fill-opacity', function() { return (this.id=='path-'+key) ? 1.0 : 0.2 })
+      .style('stroke-opacity', function() { return (this.id=='path-'+key) ? 1.0 : 0.0 })
+      .style('stroke', function() { return (this.id=='path-'+key) ? "#000" : "" })
+      .style('stroke-width', '2px')
+
+      g.selectAll('text')
+      .transition()
+      .duration(500)
+      .attr('font-weight', function(d) { return d==key ? "bold" : ""})
+        
+    }
+    function noFocus() {
+      graph_canvas.selectAll('path')
+      .transition()
+      .duration(500)
+      .style('fill-opacity', 1.0)
+      .style('stroke-opacity', 0.0)
+      .style('stroke', "")
+      .style('stroke-width', '2px')
+      g.selectAll('text')
+      .transition()
+      .duration(500)
+      .attr('font-weight', "")
+    }
+    // ************************************************* //
+    function addLabels(dat) {
+        var gg = g.selectAll('g').data(dat, function(d) { return d })
+
+        var xwidth = 6;
+        var entr = gg
+        .enter().append('g')
+
+        entr.append('rect')
+        entr.append('text')
+
+        gg
+        .attr('transform', function(d,i) { 
+          var xpos = (i%xwidth)*140
+          var ypos = ((i-(i%xwidth))/xwidth)*15
+          return 'translate(' + xpos + ',' + ypos + ')'; 
+        })
+
+        gg.select('rect')
+        .attr('x', 0)
+        .attr('y', 0)
+        .attr('width', 10)
+        .attr('height', 10)
+
+        gg.selectAll('rect')
+        .style('fill', function(d, i, ii) { return colors(ii); });
+
+        entr
+        .append('text')
+        .attr('dx', '1.4em')
+        .attr('dy', '0.91em')
+        .text(function(d) { return d; })
+        .on('mouseover', function(d) {
+          focusArea(d)
+          d3.select(this)
+          .transition()
+          .duration(500)
+          .attr('font-weight', 'bold')
+          })
+        .on('mouseout', function(d) {
+          graph_canvas.selectAll('path')
+          .transition()
+          .duration(500)
+          .style('fill-opacity', 1.0)
+          .style('stroke-opacity', 0.0)
+          d3.select(this)
+          .transition()
+          .duration(500)
+          .attr('font-weight', '')
+          })
+
+        gg.exit().remove()
+    }
+
+
+    // ************************************************* //
+    function graph(data) { 
+      subtitle.text(standard_subtitle())
+      var fieldNames = data.map(function(d) { return d.key })
+      addLabels(fieldNames)
+
+      var x = d3.time.scale()
+      .domain([d3.min(data, function(d) { return d.values[0].date }),
+               d3.max(data, function(d) { return d.values[d.values.length-1].date })])
+      .range([0, width])
+
+      var stack = d3.layout.stack()
+          .values(function(d) { return d.values; })
+          .y(function(d) { return (d.last12MonthsProduction*6.29) / 365.0 })
+
+      var stacked = stack(data)
+      var ymax = d3.max(last(stacked).values, function(d) { return d.y0 + d.y })
+
+      var y = d3.scale.linear()
+      .domain([0, ymax])
+      .range([height, 0])
+
+      var area = d3.svg.area()
+          .x(function(d) { return x(d.date); })
+          .y0(function(d) { return y(d.y0); })
+          .y1(function(d) { return y(d.y0 + d.y); });
+
+      var line = d3.svg.line()
+          .interpolate('basis')
+          .x(function(d) { return x(d.date) })
+          .y(function(d) { return y(d.last12MonthsProduction) })
+
+      var sel = graph_canvas.selectAll('path').data([]);
+      sel.exit().remove();
+
+      var sel = graph_canvas.selectAll('path').data(data);
+      sel.enter()
+      .append('path')
+      .attr('class', 'area');
+
+      sel
+      .attr('id', function(d) { return 'path-' + d.key })
+      .attr('d', function(d) { return area(d.values) })
+      .style('fill', function(d, i) { return colors(i) })
+      .style('stroke-opacity', 0.0)
+      .style('stroke', "#000")
+      .on('mouseover', function(d) {
+        focusArea(d.key)
+      })
+      .on('mouseout', function() { noFocus(); })
+
+      xAxis.call(d3.svg.axis()
+      .orient('bottom')
+      .scale(x))
+
+      yAxisLeft.call(d3.svg.axis()
+      .orient('left')
+      .scale(y))
+      yAxisRight.call(d3.svg.axis()
+      .orient('right')
+      .scale(y))
+
+      return graph
+    }
+    return graph
+}
+
+var fns = {}
+
+function update(data) {
+  data = data.filter(function(d) { return d.date != null })
+  var decades = getDistinctStartProductionDecades(data).map(function(d) { return +d })
+  var dd = productionWith12MMAByField(data)
+  //decades = [decades[1]]
+
+  decades.forEach(function(decade) {
+
+    var fields = dd.filter(function(d) { return d.startProductionDecade == decade })
+
+    fields.forEach(function(field) { field.values = field.values.filter(function(d) { return d.date.getFullYear() >= cutOffYear }) })
+    fields = fields.filter(function(field) { return field.values.length>0 })
+
+    //fields = [fields[0], fields[1]]
+    //extend production data in both directions to achieve same length in array:
+    var oldestProduction = d3.min(fields, function(field) { return field.values[0].date })
+    var newestProduction = d3.max(fields, function(field) { return field.values[field.values.length-1].date })
+
+    function shiftMonth(dat, direction) {
+      var newDate = new Date(dat.getTime())
+      newDate.setMonth(newDate.getMonth() + direction)
+      return newDate
+    }
+
+    function gap(curr, next) {
+      var currMonth = curr.getFullYear()*12 + (curr.getMonth()+1)
+      var nextMonth = next.getFullYear()*12 + (next.getMonth()+1)
+      var gap = nextMonth - currMonth
+      return gap
+    }
+
+    fields.forEach(function(field) {
+      field.values = flatten2(field.values.map(function(d, i) {
+        if (i==field.values.length-1) {
+          return [d]
+        } else {
+          var diffMonth = gap(d.date, field.values[i+1].date)
+          if (diffMonth>1) {
+            //console.log("got diff of " + diffMonth)
+          }
+          return d3.range(0, diffMonth).map(function(n) { 
+            return {last12MonthsProduction: n==0 ? d.last12MonthsProduction : 0.0 , date:shiftMonth(d.date, n)}})
+        }
+      }))
+
+      while (field.values[0].date > oldestProduction) field.values.unshift({last12MonthsProduction: 0.0, date: shiftMonth(field.values[0].date, -1)})
+
+      while (last(field.values).date < newestProduction) field.values.push({last12MonthsProduction: 0.0, date: shiftMonth(last(field.values).date, 1)})
+    })
+
+    console.log("decade " + decade + " got " + fields.length)
+
+
+    var fn = (decade in fns) ? fns[decade] : do_init(decade)
+    fns[decade] = fn
+    fn(fields)
+  })
+}
+
+get_data(update);
+</script>
+</body>
+
+</html>
+
