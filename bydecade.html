@@ -247,6 +247,12 @@ svg.append('text')
       .transition()
       .duration(500)
       .attr('font-weight', function(d) { return d==key ? "bold" : ""})
+      .style('fill-opacity', function(d) { return d==key ? 1.0 : 0.2 })
+
+      g.selectAll('rect')
+      .transition()
+      .duration(500)
+      .style('fill-opacity', function(d) { return d==key ? 1.0 : 0.2 })
         
     }
     function noFocus() {
@@ -257,10 +263,17 @@ svg.append('text')
       .style('stroke-opacity', 0.0)
       .style('stroke', "")
       .style('stroke-width', '2px')
+
       g.selectAll('text')
       .transition()
       .duration(500)
       .attr('font-weight', "")
+      .style('fill-opacity', 1.0)
+
+      g.selectAll('rect')
+      .transition()
+      .duration(500)
+      .style('fill-opacity', 1.0)
     }
     // ************************************************* //
     function addLabels(dat) {
@@ -294,24 +307,8 @@ svg.append('text')
         .attr('dx', '1.4em')
         .attr('dy', '0.91em')
         .text(function(d) { return d; })
-        .on('mouseover', function(d) {
-          focusArea(d)
-          d3.select(this)
-          .transition()
-          .duration(500)
-          .attr('font-weight', 'bold')
-          })
-        .on('mouseout', function(d) {
-          graph_canvas.selectAll('path')
-          .transition()
-          .duration(500)
-          .style('fill-opacity', 1.0)
-          .style('stroke-opacity', 0.0)
-          d3.select(this)
-          .transition()
-          .duration(500)
-          .attr('font-weight', '')
-          })
+        .on('mouseover', focusArea)
+        .on('mouseout', noFocus)
 
         gg.exit().remove()
     }
@@ -343,6 +340,12 @@ svg.append('text')
           .x(function(d) { return x(d.date); })
           .y0(function(d) { return y(d.y0); })
           .y1(function(d) { return y(d.y0 + d.y); });
+
+      // data is stacked, remove zero values for both tail and head:
+      data.forEach(function(field) {
+        while(field.values.length>0 && field.values[0].y == 0) field.values.shift()
+        while(field.values.length>0 && last(field.values).y == 0) field.values.pop()
+      })
 
       var line = d3.svg.line()
           .interpolate('basis')
