@@ -398,6 +398,7 @@ function update(data) {
   decades.forEach(function(decade) {
 
     var fields = dd.filter(function(d) { return d.startProductionDecade == decade })
+    fields.sort(function(a, b) { return a.values[0].date.getTime() - b.values[0].date.getTime() })
 
     fields.forEach(function(field) { field.values = field.values.filter(function(d) { return d.date.getFullYear() >= cutOffYear }) })
     fields = fields.filter(function(field) { return field.values.length>0 })
