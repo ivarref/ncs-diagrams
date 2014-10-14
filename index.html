@@ -59,12 +59,8 @@ path.line {
 }
 
 svg { 
-    border-top: 1px dashed #000;
-    border-right: 1px dashed #000;
-    border-left: 1px dashed #000;
-    border-bottom: 0px;
+    border: 1px solid #000;
 }
-svg:last-child { border-bottom: 1px dashed #000; }
 
 .d3-tip {
   line-height: 1;
@@ -184,6 +180,7 @@ get_data(function(data) {
     } else {
       //console.log(window.location.href);
     }
+  body.append('div').text("Most recent data point is " + format(maxDate) + ".")
 
    })
 </script>

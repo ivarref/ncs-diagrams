@@ -58,13 +58,7 @@ path.line {
     stroke-opacity: 1.0;
 }
 
-svg { 
-    border-top: 1px dashed #000;
-    border-right: 1px dashed #000;
-    border-left: 1px dashed #000;
-    border-bottom: 0px;
-}
-svg:last-child { border-bottom: 1px dashed #000; }
+svg { border: 1px solid #000; }
 
 .d3-tip {
   line-height: 1;
@@ -138,9 +132,6 @@ function label() {
     return lbl
 }
 
-function update(data) {
-    update_fns.forEach(function(fn) { fn(data) })
-}
 var form = body.append('form')
 form.append('span').text('Choose resource: ')
 var cc = form.append('input').attr('name', 'resource').attr('type', 'radio').attr('id', 'cc')
@@ -440,13 +431,14 @@ function update(data) {
       while (last(field.values).date < newestProduction) field.values.push({last12MonthsProduction: 0.0, date: shiftMonth(last(field.values).date, 1)})
     })
 
-    console.log("decade " + decade + " got " + fields.length)
-
-
     var fn = (decade in fns) ? fns[decade] : do_init(decade)
     fns[decade] = fn
     fn(fields)
   })
+
+  window.focus()
+  var format = d3.time.format("%Y-%m");
+  body.append('div').text("Most recent data point is " + format(maxDate) + ".")
 }
 
 get_data(update);
